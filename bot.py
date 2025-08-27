@@ -169,12 +169,10 @@ async def game_to_evaluate_state_2(message: Message, state: FSMContext) -> None:
 
 @dp.message(GAME_CREATE_COMMAND)
 async def game_create(message: Message, state: FSMContext) -> None:
-    if message.from_user.id == int(ADMI_ID):
-        await state.set_state(GameForm.name)
-        await message.answer(f"Введіть назву гри",
+    await state.set_state(GameForm.name)
+    await message.answer(f"Введіть назву гри",
                          reply_markup=ReplyKeyboardRemove())
-    else:
-        await message.answer(f"Тльки адмін це може зробити!")
+    await message.answer(f"Тльки адмін це може зробити!")
 
 @dp.message(GameForm.name)
 async def game_name(message: Message, state: FSMContext) -> None:
