@@ -7,3 +7,6 @@ class GameForm(StatesGroup):
     genre = State()
     authors = State()
     poster = State()
+
+class GameRating(StatesGroup):
+    rating = State()

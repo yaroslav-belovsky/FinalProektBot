@@ -17,7 +17,7 @@ from commands import (GAME_BOT_COMMAND, GAME_BOT_CREATE_COMMAND,
                       HELP_COMMAND, HELP)
 from keyborts import games_keyboard_markup, GameCallback, GameRating
 from  models import Game
-from state import GameForm
+from state import GameForm, GameRating
 
 # Bot token can be obtained via https://t.me/BotFather
 TOKEN = BOT_TOKEN
@@ -101,46 +101,17 @@ async def main() -> None:
     await dp.start_polling(bot)
 
 @dp.callback_query(GameCallback.filter())
-async def callback_game(callback: CallbackQuery, callback_data: GameCallback) -> None:
+async def callback_game(callback: CallbackQuery, callback_data: GameCallback, state: FSMContext, **kwargs) -> None:
+    print('state', state)
     print('callback_game')
     print(callback)
     print()
     print(callback_data)
-    game_id = callback_data.id
-    game_data = get_game(game_id=game_id)
-    game = Game(**game_data)
-    text = f"Гра: {game.name}\n" \
-           f"Опис: {game.description}\n" \
-           f"Рейтинг: {game.rating}\n" \
-           f"Жанр: {game.genre}\n" \
-           f"Автори: {','.join(game.authors)}\n"
-    keyboard =[]
-    keyboard.append(
-            [
-
-                InlineKeyboardButton(
-                    text="Оцінити гру",
-                    callback_data=GameCallback(id=game_id, button="rating").pack()
-
-                )
-
-            ]
-        )
-    markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-    try:
-        await callback.message.answer_photo(
-            photo=URLInputFile(
-                game.poster,
-                filename=f"{game.name}_cover.{game.poster.split('.')[-1]}"
-                )
-            )
-
-        await callback.message.answer(text, reply_markup=markup)
-
-    except Exception as e:
-        await callback.message.answer(text)
-        logging.error( logging.error(f"Failed to load images for game{game.name}: {str(e)}") )
+    print('kwargs', kwargs)
+    if callback_data.button == "game_selector":
+        await game_selekt(callback, callback_data)
+    elif callback_data.button == "rating":
+        await game_to_evaluate(callback, callback_data, state)
 
 async def game_selekt(callback: CallbackQuery, callback_data: GameCallback):
     game_id = callback_data.id
@@ -179,34 +150,57 @@ async def game_selekt(callback: CallbackQuery, callback_data: GameCallback):
         await callback.message.answer(text)
         logging.error(logging.error(f"Failed to load images for game{game.name}: {str(e)}"))
 
-
-@dp.callback_query(GameRating.filter())
-async def game_to_evaluate(rating: Message, game_id:  int | None = None)   -> None:
+async def game_to_evaluate(callback: CallbackQuery, callback_data: GameCallback, state: FSMContext)   -> None:
+     print('state', state)
+     game_id = callback_data.id
      print('game_to_evaluate')
-     print('rating', rating)
+     print('rating', callback)
      print('game_id', game_id)
-
-     rating_user = await rating.answer(f"Введіть оціну від 1 до 10 гри",
+     data = await state.update_data(game_id=game_id)
+     await state.set_state(GameRating.rating)
+     await callback.answer(f"Введіть оціну від 1 до 10.",
                          reply_markup=ReplyKeyboardRemove())
-     try:
-         print(rating_user)
-         if int(rating_user) > 0 and int(rating_user) < 11:
-             with open("data.json", "r", encoding="utf-8") as fp:
-                 games = json.load(fp)
-                 game_data = games[game_id]
-                 game = Game(**game_data)
-                 do_rating = game.rating
-                 pisla_rating= (int(do_rating) + int(rating_user)) / 2
-             with open("data.json", "w", encoding="utf-8") as fp:
-                 game_data["rating"] = pisla_rating
-                 print(game_data)
-                 json.dump(games, fp)
-         else:
+
+
+@dp.message(GameRating.rating)
+async def game_to_evaluate_state_2(message: Message, state: FSMContext) -> None:
+    print('message', message.text, message)
+    data = await state.get_data()
+    print('state', state, data)
+    game_id = data['game_id']
+    rating = message.text
+    # game_id = callback_data.id
+    # print('game_id', game_id)
+    # game_data = get_game(game_id=game_id)
+    # print('game_data', game_data)
+
+    # game = Game(**game_data)
+    # await state.update_data(name=game.name)
+    # await state.update_data(description=game.description)
+    # await state.update_data(rating=message.text)
+    # await state.update_data(genre=game.genre)
+    # await state.update_data(authors=','.join(game.authors))
+    # data = await state.update_data(poster=game.poster)
+    # game2 = Game(**data)
+    try:
+        print(game_id)
+        if int(rating) > 0 and int(rating) < 11:
+            with open("data.json", "r", encoding="utf-8") as fp:
+                games = json.load(fp)
+                game_data = games[game_id]
+                do_rating = game_data['rating']
+                pisla_rating = (int(do_rating) + int(rating)) / 2
+            with open("data.json", "w", encoding="utf-8") as fp:
+                game_data["rating"] = pisla_rating
+                print(game_data)
+                json.dump(games, fp, indent=4, ensure_ascii=False)
+                await state.clear()
+        else:
             await CallbackQuery.message.answer("Від 1 до 10! Не більше не менше!")
-            asyncio.run(game_to_evaluate())
-     except ValueError:
-         await CallbackQuery.message.answer("Це не число!")
-         asyncio.run(game_to_evaluate())
+    except ValueError:
+        await CallbackQuery.message.answer("Це не число!")
+
+
 
 
 
