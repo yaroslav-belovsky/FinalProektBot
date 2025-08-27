@@ -29,7 +29,7 @@ TOKEN = BOT_TOKEN
 dp = Dispatcher()
 @dp.message(HELP_COMMAND)
 async def help(message: Message) -> None:
-    await message.answer(f"{html.code(message.from_user.full_name)} ти тут зможеж отримати інформацію про ігри, і оцінити їх.")
+    await message.answer(f"{html.code(message.from_user.full_name)} ти тут зможеш отримати інформацію про ігри, і оцінити їх.")
 
 @dp.message(Command("info"))
 async def info(message: Message) -> None:
@@ -172,7 +172,6 @@ async def game_create(message: Message, state: FSMContext) -> None:
     await state.set_state(GameForm.name)
     await message.answer(f"Введіть назву гри",
                          reply_markup=ReplyKeyboardRemove())
-    await message.answer(f"Тльки адмін це може зробити!")
 
 @dp.message(GameForm.name)
 async def game_name(message: Message, state: FSMContext) -> None:
