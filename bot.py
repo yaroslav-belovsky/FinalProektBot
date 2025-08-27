@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import sys
+import cohere
+from aiogram.dispatcher.middlewares.user_context import EventContext
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram import Bot, Dispatcher, html
@@ -35,27 +37,11 @@ async def info(message: Message) -> None:
 
 @dp.message(CommandStart())
 async def command_start_handler(message: Message) -> None:
-    """
-    This handler receives messages with `/start` command
-    """
-    # Most event objects have aliases for API methods that can be called in events' context
-    # For example if you want to answer to incoming message you can use `message.answer(...)` alias
-    # and the target chat will be passed to :ref:`aiogram.methods.send_message.SendMessage`
-    # method automatically or call API method directly via
-    # Bot instance: `bot.send_message(chat_id=message.chat.id, ...)`
     await message.answer(f"Hello, {html.code(message.from_user.full_name)}!")
     logging.info(f"{html.link(message.from_user.full_name)} has started")
 
 @dp.message(Command("who_developer"))
 async def link(message: Message) -> None:
-    """
-        This handler receives messages with `/start` command
-        """
-    # Most event objects have aliases for API methods that can be called in events' context
-    # For example if you want to answer to incoming message you can use `message.answer(...)` alias
-    # and the target chat will be passed to :ref:`aiogram.methods.send_message.SendMessage`
-    # method automatically or call API method directly via
-    # Bot instance: `bot.send_message(chat_id=message.chat.id, ...)`
     await message.answer(f"{html.code(message.from_user.full_name)}, don't you know?! That's Yaroslav Bilovsky!")
 
 def get_game(file_path: str = "data.json", game_id: int | None = None):
@@ -102,12 +88,6 @@ async def main() -> None:
 
 @dp.callback_query(GameCallback.filter())
 async def callback_game(callback: CallbackQuery, callback_data: GameCallback, state: FSMContext, **kwargs) -> None:
-    print('state', state)
-    print('callback_game')
-    print(callback)
-    print()
-    print(callback_data)
-    print('kwargs', kwargs)
     if callback_data.button == "game_selector":
         await game_selekt(callback, callback_data)
     elif callback_data.button == "rating":
@@ -151,54 +131,36 @@ async def game_selekt(callback: CallbackQuery, callback_data: GameCallback):
         logging.error(logging.error(f"Failed to load images for game{game.name}: {str(e)}"))
 
 async def game_to_evaluate(callback: CallbackQuery, callback_data: GameCallback, state: FSMContext)   -> None:
-     print('state', state)
      game_id = callback_data.id
-     print('game_to_evaluate')
-     print('rating', callback)
-     print('game_id', game_id)
      data = await state.update_data(game_id=game_id)
      await state.set_state(GameRating.rating)
-     await callback.answer(f"Введіть оціну від 1 до 10.",
+
+     await callback.message.answer(f"Введіть оціну від 1 до 10.",
                          reply_markup=ReplyKeyboardRemove())
 
 
 @dp.message(GameRating.rating)
 async def game_to_evaluate_state_2(message: Message, state: FSMContext) -> None:
-    print('message', message.text, message)
     data = await state.get_data()
-    print('state', state, data)
     game_id = data['game_id']
     rating = message.text
-    # game_id = callback_data.id
-    # print('game_id', game_id)
-    # game_data = get_game(game_id=game_id)
-    # print('game_data', game_data)
-
-    # game = Game(**game_data)
-    # await state.update_data(name=game.name)
-    # await state.update_data(description=game.description)
-    # await state.update_data(rating=message.text)
-    # await state.update_data(genre=game.genre)
-    # await state.update_data(authors=','.join(game.authors))
-    # data = await state.update_data(poster=game.poster)
-    # game2 = Game(**data)
     try:
-        print(game_id)
-        if int(rating) > 0 and int(rating) < 11:
+        if float(rating) > 0 and float(rating) < 11:
             with open("data.json", "r", encoding="utf-8") as fp:
                 games = json.load(fp)
                 game_data = games[game_id]
                 do_rating = game_data['rating']
-                pisla_rating = (int(do_rating) + int(rating)) / 2
+                pisla_rating = (float(do_rating) + float(rating)) / 2
             with open("data.json", "w", encoding="utf-8") as fp:
                 game_data["rating"] = pisla_rating
                 print(game_data)
                 json.dump(games, fp, indent=4, ensure_ascii=False)
                 await state.clear()
+                await message.answer("гру успішно оцінено!")
         else:
-            await CallbackQuery.message.answer("Від 1 до 10! Не більше не менше!")
+            await message.answer("Від 1 до 10! Не більше не менше!")
     except ValueError:
-        await CallbackQuery.message.answer("Це не число!")
+        await message.answer("Це не число!")
 
 
 
@@ -258,6 +220,27 @@ async def game_poster(message: Message, state: FSMContext) -> None:
    await state.clear()
    await message.answer(f"Гру {game.name} успішно додано",
                         reply_markup=ReplyKeyboardRemove())
+
+def generate_text(prompt):
+    co = cohere.ClientV2(api_key="IyueYrhWFdmD25nVm495Xc1boJEbiIx4SWEgXveY")
+
+    res =co.chat(
+        model="command-a-03-2025",
+        messages=[
+        {
+        "role": "user",
+        "content": f"{prompt}",
+        }
+        ],
+        )
+    return res.message.content[0].text
+
+@dp.message()
+async def echo_handler(messege: Message) -> None:
+    await messege.answer(f"Дякую {messege.from_user.full_name}. "
+                         f"Генерую відповідь, зачекайте...")
+    generated_text = generate_text(messege.text)
+    await messege.answer(generated_text)
 
 
 
